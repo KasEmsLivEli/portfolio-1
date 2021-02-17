@@ -1,0 +1,93 @@
+---
+title: "Class3"
+author: "Liv Tollånes"
+date: "2/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+### PREPARATION
+
+
+library(sjmisc)
+library(tidyverse)
+library(ggplot2)
+
+#Loading the data into one coherent dataframe
+read <- function(filename){
+  d <- read_csv(paste0("/Users/liv/Library/Mobile Documents/com~apple~CloudDocs/Cognitive Science BA/4th semester/Models for perception and action/ModelsPerceptionAction/Simon/", filename))
+}
+
+#  Identify all files to be read and run the function on the whole dataset using map_df
+data = list.files(path = "/Users/liv/Library/Mobile Documents/com~apple~CloudDocs/Cognitive Science BA/4th semester/Models for perception and action/ModelsPerceptionAction/Simon/", pattern = ".csv") %>% purrr::map_df(read)
+
+#Removing columns of no importance
+data$`rt,"stimulus","key_press","type","part","color","position","trial_type","trial_index","time_elapsed","internal_node_id","subject","accuracy"` <- NULL
+data$stimulus <- NULL
+data$trial_type <- NULL
+
+
+#Removing the practice data
+data <- data[!(data$part == "training") , ]
+
+#Making a new variable called ‘congruency’ that code the congruent, neutral and incongruent conditions
+data$congruency <- ifelse(data$position == "middle", "neutral", "incongruent") 
+data$congruency <- ifelse(data$color == "green" & data$position == "left", "congruent", data$congruency) 
+data$congruency <- ifelse(data$color == "red" & data$position == "right", "congruent", data$congruency)
+data$congruency <- ifelse(data$color == "red" & data$position == "left", "incongruent", data$congruency)
+data$congruency <- ifelse(data$color == "green" & data$position == "right", "incongruent", data$congruency)
+data$congruency <- ifelse(data$position == "middle", "neutral", data$congruency)
+
+
+#removing NAs
+data <- na.omit(data)
+
+#Visualizing outliers
+#Creating a vector of the outliers
+outliers <- boxplot(data$rt, plot=FALSE)$out
+
+#Plotting reaction times before removing outliers
+boxplot(data$rt)
+
+#Creating a new data frame from which we will remove outliers
+data2 <- data
+data2<- data2[-which(data2$rt %in% outliers),]
+
+#Data after outliers are removed 
+boxplot(data2$rt)
+
+#Plotting the difference in reaction times between congruency conditions, only using correct responses¨
+library(dplyr)
+dtrue <- subset(data2, accuracy == "TRUE")
+
+# Plotting different reaction times for each congruency group
+ggplot(dtrue, aes(congruency, rt, fill = congruency)) +
+  geom_boxplot(show.legend = FALSE) +
+  ggtitle("Reaction times for each concgruency condition, true answers")
+
+
+#Plotting reaction times for accuracy group
+ggplot(data2, aes(accuracy, rt, fill = accuracy)) +
+  geom_boxplot(show.legend = FALSE) +
+  ggtitle("Reaction times for for each accuracy group") 
+
+
+
+#Plotting reaction times per accuracy group for each condition
+summarytable <- data2 %>% group_by(congruency) %>% summarise(mean(accuracy), sd(accuracy), n(), mean(rt))
+summarytable <- na.omit(summarytable)
+
+#Making the mixed linear model
+install.packages("lmerTest")
+library(lmerTest)
+
+analysis1 <- lmerTest::lmer(rt~congruency + (1|subject), data = data2, REML = F)
+summary(analysis1)
+
+```
+
